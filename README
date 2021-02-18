@@ -1,0 +1,188 @@
+###############################################################################
+# SCAP Security Guide RHEL 6 DVD CREATOR
+#
+# This script was written by Frank Caviggia, Red Hat Consulting
+# Last update was 15 April 2017
+# This script is NOT SUPPORTED by Red Hat Global Support Services.
+#
+# Author: Frank Caviggia (fcaviggia@gmail.com)
+# Copyright: Red Hat, (c) 2018
+# License: Apache License, Version 2.0
+# Description: Kickstart Installation of RHEL 6 with SSG
+# Repurposed  and updated for TACSIM By Edwin Ngwa : 2/10/2021
+###############################################################################
+
+
+ABOUT
+=====
+
+Modifies a RHEL 6.4+ x86_64 Workstation or Server DVD with a kickstart
+that will install a system that is configured and hardened for
+Red Hat Enterprise Linux 6. (Latest Update RHEL 6.9)
+
+The kickstart script involves the integration of the following projects 
+into a single installer:
+
+   - classification-banner.py (Python for displaying graphical classification banner)
+   
+        https://github.com/RedHatGov/classification-banner
+
+   - SCAP Security Guide (SSG) Content - Benchmark and hardening scripts for the 
+     system after installation
+   - Security Content Automation Protocol (SCAP) Scan is method for using known standards
+    to run vulnerability and compliance scans. This allows the user to evaluate and secure their systems.
+
+        https://github.com/OpenSCAP/scap-security-guide
+        https://www.open-scap.org/security-policies/scap-security-guide/
+        https://www.redhat.com/en/blog/scap-security-guide-helping-you-achieve-security-policy-compliance
+
+HOW TO USE
+=========
+ Refer to https://dev.azure.com/TACSIM/TACSIM/_wiki/wikis/TACSIM.wiki/96/RHEL-6-(WIP)
+
+ 
+CONTENT
+=======
+
+createiso.sh - installation script to modify RHEL 6.4+ ISO image
+USAGE :  ./createiso.sh rhel-server-6.6-x86_64-dvd.iso 
+
+
+/config - Kickstarts, Python, and RPMs needed to modify image.
+
+	isolinux/
+
+		grub.conf - Menu Configuration for Kickstart
+
+		isolinux.cfg - Menu Configuration for Kickstart
+
+	hardening/
+
+		ssg-rhel.cfg
+		
+			Kickstart Configuration (Calls menu.py in %pre)
+		main configuration script called by the boot loader to kickstart the install
+		menu.py
+		
+			Python Script that presents a graphical menu to modify the
+			kickstart. Contains the "Profiles" for configuring the 
+			system partitioning and packages.
+
+		classification-banner.py
+		
+			Graphical Classification Banner (for GNOME Desktops User/
+			Developer Workstation Profiles)
+
+		scap-security-guide-*.el6.noarch.rpm
+
+			Uses OpenSCAP and the SCAP Security Guide (SSG) to test and
+			remediate system.
+
+		ssg-suplemental.sh
+
+			Additional system lockdowns (FIPS 140-2 Kernel Mode, GNOME,
+			wheel group for root access, etc.)
+
+		rhevm-preinstall.sh
+		rhevm-postinstall.sh
+
+			Scripts to losen settings temporararily to allow registration
+			of the system with RHEV-M by allowing root login and allowing
+			exec in /tmp. Run rhevm-postinstall.sh after system is added
+			into RHEV-M. Copied to /root after kickstart install
+
+		iptables.sh
+
+			Configures firewall during kicckstart installation. Called in
+			menu.py script. Firewall is configured to reccomended ports
+			for each product or profile. Copied to /root after kickstart
+			install
+
+		ipa-pam-configuration.sh
+
+			Configures system for using IPA/IdM authentication by
+			overwriting the pam.d configurations. Copied to /root
+			after kickstart installation
+
+HARDENING INFORMATION
+=====================
+
+Here is some additional information added by the supplemental hardening script
+in addition to the SSG:
+
+1. The kernel is cofigured in FIPS 140-2 mode on install
+
+2. Shell timeout (bash/csh) is 15 minutes of inactivity, vlock will lock CLI
+   console
+
+3. The 'wheel' group is required for privleged users (beyond root) to run 
+   `su -` or `sudo -i` commands, sudo timeout is 5 minutes
+
+4. The 'sshusers' group is required for SSH/SFTP access, other users are 
+   limited to console access without this group
+   
+5. Runlevel 5 is configured by default 
+
+6. Additional Software such as McAfee EPo/HBSS may be required meet site 
+   policy
+
+7. Configure NTP (/etc/ntp.conf) and rsyslog logging to remote server 
+   (/etc/rsyslog.conf)
+
+8. Create users:
+
+        Local Console Access Only (Unprivileged)
+          
+               # useradd -m -c "Local User" localuser
+               
+        Remote Access (Unprivileged)
+          
+               # useradd -m -c "Remote User" -G sshusers remoteuser
+               
+        System Administrator (SA) (Privileged User)
+               
+               # useradd -m -c "V6ICAD" -G sshusers,wheel V6ICAD
+               
+        (Optional) After adding SAs to the system, lock the root account:
+          
+               # passwd -l root
+
+TACSIM NOTES
+===========
+
+1. The hardening script has been modified for TACSIM purposes with some deviation from the STIG 
+  - the classification banner will not be displayed on the workstation
+  - Run level 5 has been configured to enable the Desktop GUI by default
+  - A TACSIM I$T Workstation system profile is included with most of the packages required for a TACSIM COTS  (Virtualization, office suite, mysql-server)
+  - Future work will be required to automate some of the post-installations steps below
+   
+  Installing additional packages 
+  =================
+- Depending on the System Profile chosen during install, certain packages will not be available in your system.
+- Moreover, this is a default  RHEL stock install with only the software version included in the release  
+- Follow applicable instructions to update software versions and install additional packages not included with the system profile. 
+
+1. The additional librairies and programs needed by TACSIM can be installed directly using the "dev_pack" folder
+   Refer to https://dev.azure.com/TACSIM/TACSIM/_wiki/wikis/TACSIM.wiki/98/TACSIM-install_dev_pack-Instructions
+
+2.  To add the TACSIM automated restore and backup , refer to https://dev.azure.com/TACSIM/TACSIM/_wiki/wikis/TACSIM.wiki/88/Automated-restore-and-backup-functionalities-on-a-TACSIM-system-from-a-restore-partition-using-clonezilla
+
+3.  - McAfee HBSS(Host-Based Security System) installation procedures: https://dev.azure.com/TACSIM/TACSIM/_wiki/wikis/TACSIM.wiki/189/RHEL-6-McAfee-HBSS(Host-Based-Security-System)-installation).
+
+4.  RHEL Registration Refer to : https://dev.azure.com/TACSIM/TACSIM/_wiki/wikis/TACSIM.wiki/45/RedHat-Registration-for-a-Tacsim-delivery
+ 
+
+**TODO**: 
+
+- [ ]   Integrate as much as possible into a single installer the above post-installation steps
+- [ ]   Create TACSIM ETL and VM Workstation profiles
+- [ ]   Make the Kickstart installation source available on the network (NFS, FTP, or HTTP/S) with applicable instructions on how to use it 
+ 
+ #  References
+https://nvd.nist.gov/ncp/checklist/438
+https://iase.disa.mil/stigs/scap/index.html
+https://public.cyber.mil/stigs/scap/
+https://www.open-scap.org/security-policies/scap-security-guide/
+https://github.com/RedHatGov/ssg-el6-kickstart
+https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/installation_guide/sect-kickstart-howto
+https://docs.fedoraproject.org/en-US/Fedora/25/html/Installation_Guide/chap-kickstart-installations.html
